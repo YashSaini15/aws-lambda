@@ -35,4 +35,4 @@ jobs:
         run: npx tsc -p tsconfig.lambda.json
 
       - name: Deploy
-        run: cdk deploy --require-approval never
+        run: npx cdk deploy --require-approval never
