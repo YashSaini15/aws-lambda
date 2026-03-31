@@ -6,11 +6,15 @@ import * as apigatewayIntegrations from "aws-cdk-lib/aws-apigatewayv2-integratio
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
+interface OrderApiCdkStackProps extends cdk.StackProps {
+  stageName: string;
+}
 export class OrderApiCdkStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: OrderApiCdkStackProps) {
     super(scope, id, props);
 
     const ordersTable = new dynamodb.Table(this, "Orders", {
+      tableName: `Orders-${props.stageName}`,
       partitionKey: { name: "orderId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
     });
@@ -23,7 +27,7 @@ export class OrderApiCdkStack extends cdk.Stack {
         TABLE_NAME: ordersTable.tableName,
       },
     });
-    
+
     ordersTable.grantReadWriteData(orderApiHandler);
 
     const api = new apigateway.HttpApi(this, "OrderApi", {

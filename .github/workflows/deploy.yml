@@ -34,5 +34,5 @@ jobs:
       - name: Compile Lambda
         run: npx tsc -p tsconfig.lambda.json
 
-      - name: Deploy
-        run: npx cdk deploy --require-approval never
+      - name: Deploy to dev
+        run: npx cdk deploy OrderApiCdkStack-dev --require-approval never
