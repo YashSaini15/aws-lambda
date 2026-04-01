@@ -11,6 +11,15 @@ import {
 const client = new DynamoDBClient({});
 const db = DynamoDBDocumentClient.from(client);
 
+const log = {
+  info: (message: string, data?: object) => {
+    console.log(JSON.stringify({ level: "INFO", message, ...data }));
+  },
+  error: (message: string, data?: object) => {
+    console.error(JSON.stringify({ level: "ERROR", message, ...data }));
+  },
+};
+
 export const handler = async (
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResult> => {
@@ -18,11 +27,19 @@ export const handler = async (
     event.rawPath === "/health" &&
     event.requestContext.http.method === "GET"
   ) {
+    log.info("incoming request", {
+      method: event.requestContext.http.method,
+      path: event.rawPath,
+    });
     return {
       statusCode: 200,
       body: JSON.stringify({ message: "OK" }),
     };
   } else if (event.requestContext.http.method === "GET") {
+    log.info("incoming request", {
+      method: event.requestContext.http.method,
+      path: event.rawPath,
+    });
     const orderId = event.rawPath.split("/")[2];
     if (!orderId) {
       return {
@@ -54,12 +71,20 @@ export const handler = async (
         }),
       };
     } catch (error) {
+      log.error("failed to get order", {
+        orderId,
+        error: error instanceof Error ? error.message : "unknown error",
+      });
       return {
         statusCode: 500,
         body: JSON.stringify({ message: "Internal Server Error" }),
       };
     }
   } else if (event.requestContext.http.method === "PUT") {
+    log.info("incoming request", {
+      method: event.requestContext.http.method,
+      path: event.rawPath,
+    });
     const orderId = event.rawPath.split("/")[2];
     if (event.headers["content-type"] !== "application/json") {
       return {
@@ -110,15 +135,23 @@ export const handler = async (
         body: JSON.stringify({ message: "Processing order: " + orderId }),
       };
     } catch (error) {
+      log.error("failed to update order", {
+        orderId,
+        error: error instanceof Error ? error.message : "unknown error",
+      });
       return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "Invalid request body" }),
+        statusCode: 500,
+        body: JSON.stringify({ message: "Internal Server Error" }),
       };
     }
   } else if (
     event.rawPath === "/orders" &&
     event.requestContext.http.method === "POST"
   ) {
+    log.info("incoming request", {
+      method: event.requestContext.http.method,
+      path: event.rawPath,
+    });
     if (event.headers["content-type"] !== "application/json") {
       return {
         statusCode: 415,
@@ -150,12 +183,19 @@ export const handler = async (
         body: JSON.stringify({ message: "Processing order: " + body.orderId }),
       };
     } catch (error) {
+      log.error("failed to create order", {
+        error: error instanceof Error ? error.message : "unknown error",
+      });
       return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "Invalid request body" }),
+        statusCode: 500,
+        body: JSON.stringify({ message: "Internal Server Error" }),
       };
     }
   } else if (event.requestContext.http.method === "DELETE") {
+    log.info("incoming request", {
+      method: event.requestContext.http.method,
+      path: event.rawPath,
+    });
     const orderId = event.rawPath.split("/")[2];
     if (!orderId) {
       return {
@@ -175,12 +215,20 @@ export const handler = async (
         body: JSON.stringify({ message: "Order deleted successfully" }),
       };
     } catch (error) {
+      log.error("failed to delete order", {
+        orderId,
+        error: error instanceof Error ? error.message : "unknown error",
+      });
       return {
         statusCode: 500,
         body: JSON.stringify({ message: "Internal Server Error" }),
       };
     }
   } else {
+    log.info("incoming request", {
+      method: event.requestContext.http.method,
+      path: event.rawPath,
+    });
     return {
       statusCode: 404,
       body: JSON.stringify({ message: "Not Found" }),
