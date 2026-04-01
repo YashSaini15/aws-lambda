@@ -8,7 +8,8 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as snsSubscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import * as cloudwatchActions from "aws-cdk-lib/aws-cloudwatch-actions";
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
 
 interface OrderApiCdkStackProps extends cdk.StackProps {
   stageName: string;
@@ -16,6 +17,18 @@ interface OrderApiCdkStackProps extends cdk.StackProps {
 export class OrderApiCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: OrderApiCdkStackProps) {
     super(scope, id, props);
+
+    const deadLetterQueue = new sqs.Queue(this, "OrderDeadLetterQueue", {
+      queueName: `order-dlq-${props.stageName}`,
+    });
+
+    const orderQueue = new sqs.Queue(this, "OrderQueue", {
+      queueName: `orders-${props.stageName}`,
+      deadLetterQueue: {
+        queue: deadLetterQueue,
+        maxReceiveCount: 3, // move to DLQ after 3 failed attempts
+      },
+    });
 
     const ordersTable = new dynamodb.Table(this, "Orders", {
       tableName: `Orders-${props.stageName}`,
@@ -29,8 +42,25 @@ export class OrderApiCdkStack extends cdk.Stack {
       code: lambda.Code.fromAsset("dist"),
       environment: {
         TABLE_NAME: ordersTable.tableName,
+        QUEUE_URL: orderQueue.queueUrl,
       },
     });
+
+    const orderProcessorHandler = new lambda.Function(
+      this,
+      "OrderProcessorHandler",
+      {
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: "orderProcessor.handler",
+        code: lambda.Code.fromAsset("dist"),
+      },
+    );
+
+    orderProcessorHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(orderQueue, {
+        batchSize: 10,
+      }),
+    );
 
     const errorMetric = orderApiHandler.metricErrors({
       period: cdk.Duration.minutes(5),
@@ -50,10 +80,12 @@ export class OrderApiCdkStack extends cdk.Stack {
     alarmTopic.addSubscription(
       new snsSubscriptions.EmailSubscription("er.saini.yash@gmail.com"),
     );
- 
+
     alarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
     ordersTable.grantReadWriteData(orderApiHandler);
+    orderQueue.grantSendMessages(orderApiHandler);
+    orderQueue.grantConsumeMessages(orderProcessorHandler);
 
     const api = new apigateway.HttpApi(this, "OrderApi", {
       defaultIntegration: new apigatewayIntegrations.HttpLambdaIntegration(

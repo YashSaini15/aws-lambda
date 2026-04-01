@@ -7,9 +7,11 @@ import {
   PutCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 
 const client = new DynamoDBClient({});
 const db = DynamoDBDocumentClient.from(client);
+const sqsClient = new SQSClient({});
 
 const log = {
   info: (message: string, data?: object) => {
@@ -178,6 +180,13 @@ export const handler = async (
         }),
       );
 
+      await sqsClient.send(
+        new SendMessageCommand({
+          QueueUrl: process.env.QUEUE_URL,
+          MessageBody: JSON.stringify(body),
+        }),
+      );
+      
       return {
         statusCode: 200,
         body: JSON.stringify({ message: "Processing order: " + body.orderId }),
