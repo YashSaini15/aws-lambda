@@ -5,6 +5,9 @@ import * as apigateway from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigatewayIntegrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as snsSubscriptions from "aws-cdk-lib/aws-sns-subscriptions";
+import * as cloudwatchActions from "aws-cdk-lib/aws-cloudwatch-actions";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
 interface OrderApiCdkStackProps extends cdk.StackProps {
@@ -33,12 +36,22 @@ export class OrderApiCdkStack extends cdk.Stack {
       period: cdk.Duration.minutes(5),
     });
 
-    new cloudwatch.Alarm(this, "LambdaErrorAlarm", {
+    const alarm = new cloudwatch.Alarm(this, "LambdaErrorAlarm", {
       metric: errorMetric,
       threshold: 1,
       evaluationPeriods: 1,
       alarmDescription: `Lambda errors in ${props.stageName}`,
     });
+
+    const alarmTopic = new sns.Topic(this, "AlarmTopic", {
+      topicName: `lambda-errors-${props.stageName}`,
+    });
+
+    alarmTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription("er.saini.yash@gmail.com"),
+    );
+
+    alarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
     ordersTable.grantReadWriteData(orderApiHandler);
 
