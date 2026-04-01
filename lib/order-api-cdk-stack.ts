@@ -3,6 +3,7 @@ import { Construct } from "constructs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as apigateway from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigatewayIntegrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
@@ -26,6 +27,17 @@ export class OrderApiCdkStack extends cdk.Stack {
       environment: {
         TABLE_NAME: ordersTable.tableName,
       },
+    });
+
+    const errorMetric = orderApiHandler.metricErrors({
+      period: cdk.Duration.minutes(5),
+    });
+
+    new cloudwatch.Alarm(this, "LambdaErrorAlarm", {
+      metric: errorMetric,
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: `Lambda errors in ${props.stageName}`,
     });
 
     ordersTable.grantReadWriteData(orderApiHandler);
