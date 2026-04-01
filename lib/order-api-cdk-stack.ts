@@ -50,7 +50,7 @@ export class OrderApiCdkStack extends cdk.Stack {
     alarmTopic.addSubscription(
       new snsSubscriptions.EmailSubscription("er.saini.yash@gmail.com"),
     );
-
+ 
     alarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
     ordersTable.grantReadWriteData(orderApiHandler);
