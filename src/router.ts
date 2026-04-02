@@ -5,6 +5,7 @@ import { getOrderHandler } from "./handlers/orders/getOrder";
 import { updateOrderHandler } from "./handlers/orders/updateOrder";
 import { deleteOrderHandler } from "./handlers/orders/deleteOrder";
 import { createProductHandler } from "./handlers/products/createProduct";
+import { getProductHandler } from "./handlers/products/getProducts";
 
 type Handler = (
   event: APIGatewayProxyEventV2,
@@ -17,6 +18,7 @@ const routes: Record<string, Handler> = {
   "PUT /orders/:id": updateOrderHandler,
   "DELETE /orders/:id": deleteOrderHandler,
   "POST /products": createProductHandler,
+  "GET /products/:id": getProductHandler,
 };
 
 const matchRoute = (method: string, path: string): Handler | undefined => {
