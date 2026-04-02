@@ -22,10 +22,26 @@ export class OrderApiCdkStack extends cdk.Stack {
       queueName: `order-dlq-${props.stageName}`,
     });
 
+    const productDeadLetterQueue = new sqs.Queue(
+      this,
+      "ProductDeadLetterQueue",
+      {
+        queueName: `product-dlq-${props.stageName}`,
+      },
+    );
+
     const orderQueue = new sqs.Queue(this, "OrderQueue", {
       queueName: `orders-${props.stageName}`,
       deadLetterQueue: {
         queue: deadLetterQueue,
+        maxReceiveCount: 3, // move to DLQ after 3 failed attempts
+      },
+    });
+
+    const productQueue = new sqs.Queue(this, "ProductQueue", {
+      queueName: `products-${props.stageName}`,
+      deadLetterQueue: {
+        queue: productDeadLetterQueue,
         maxReceiveCount: 3, // move to DLQ after 3 failed attempts
       },
     });
@@ -36,6 +52,12 @@ export class OrderApiCdkStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
     });
 
+    const productsTable = new dynamodb.Table(this, "Products", {
+      tableName: `Products-${props.stageName}`,
+      partitionKey: { name: "productId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+    });
+
     const orderApiHandler = new lambda.Function(this, "OrderApiHandler", {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: "index.handler",
@@ -43,6 +65,8 @@ export class OrderApiCdkStack extends cdk.Stack {
       environment: {
         TABLE_NAME: ordersTable.tableName,
         QUEUE_URL: orderQueue.queueUrl,
+        PRODUCTS_TABLE_NAME: productsTable.tableName,
+        PRODUCTS_QUEUE_URL: productQueue.queueUrl,
       },
     });
 
@@ -51,13 +75,29 @@ export class OrderApiCdkStack extends cdk.Stack {
       "OrderProcessorHandler",
       {
         runtime: lambda.Runtime.NODEJS_22_X,
-        handler: "orderProcessor.handler",
+        handler: "handlers/orders/orderProcessor.handler",
         code: lambda.Code.fromAsset("dist"),
       },
     );
 
     orderProcessorHandler.addEventSource(
       new lambdaEventSources.SqsEventSource(orderQueue, {
+        batchSize: 10,
+      }),
+    );
+
+    const productProcessorHandler = new lambda.Function(
+      this,
+      "ProductProcessorHandler",
+      {
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: "handlers/products/productProcessor.handler",
+        code: lambda.Code.fromAsset("dist"),
+      },
+    );
+
+    productProcessorHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(productQueue, {
         batchSize: 10,
       }),
     );
@@ -87,6 +127,10 @@ export class OrderApiCdkStack extends cdk.Stack {
     orderQueue.grantSendMessages(orderApiHandler);
     orderQueue.grantConsumeMessages(orderProcessorHandler);
 
+    productsTable.grantReadWriteData(orderApiHandler);
+    productQueue.grantSendMessages(orderApiHandler);
+    productQueue.grantConsumeMessages(productProcessorHandler);
+
     const api = new apigateway.HttpApi(this, "OrderApi", {
       defaultIntegration: new apigatewayIntegrations.HttpLambdaIntegration(
         "OrderApiHandlerIntegration",
@@ -98,12 +142,5 @@ export class OrderApiCdkStack extends cdk.Stack {
       value: api.url!,
       description: "API Gateway URL",
     });
-
-    // The code that defines your stack goes here
-
-    // example resource
-    // const queue = new sqs.Queue(this, 'OrderApiCdkQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
   }
 }
