@@ -186,13 +186,66 @@ export const handler = async (
           MessageBody: JSON.stringify(body),
         }),
       );
-      
+
       return {
         statusCode: 200,
         body: JSON.stringify({ message: "Processing order: " + body.orderId }),
       };
     } catch (error) {
       log.error("failed to create order", {
+        error: error instanceof Error ? error.message : "unknown error",
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ message: "Internal Server Error" }),
+      };
+    }
+  } else if (
+    event.rawPath === "/products" &&
+    event.requestContext.http.method === "POST"
+  ) {
+    log.info("incoming request", {
+      method: event.requestContext.http.method,
+      path: event.rawPath,
+    });
+    if (event.headers["content-type"] !== "application/json") {
+      return {
+        statusCode: 415,
+        body: JSON.stringify({ message: "Unsupported Media Type" }),
+      };
+    }
+
+    try {
+      const body = JSON.parse(event.body || "{}");
+      if (!body.productId) {
+        return {
+          statusCode: 422,
+          body: JSON.stringify({ message: "productId is required" }),
+        };
+      }
+
+      await db.send(
+        new PutCommand({
+          TableName: process.env.TABLE_NAME,
+          Item: {
+            ...body,
+          },
+        }),
+      );
+
+      await sqsClient.send(
+        new SendMessageCommand({
+          QueueUrl: process.env.QUEUE_URL,
+          MessageBody: JSON.stringify(body),
+        }),
+      );
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Processing product: " + body.productId }),
+      };
+    } catch (error) {
+      log.error("failed to create product", {
         error: error instanceof Error ? error.message : "unknown error",
       });
       return {
